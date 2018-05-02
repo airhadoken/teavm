@@ -223,6 +223,10 @@ public final class TFormatter implements Closeable, Flushable {
                     formatDecimalInt(specifier, true);
                     break;
 
+               case '%':
+                    out.append('%');
+                    break;
+
                 default:
                     throw new UnknownFormatConversionException(String.valueOf(specifier));
             }
@@ -416,6 +420,10 @@ public final class TFormatter implements Closeable, Flushable {
         }
 
         private void configureFormat() {
+            if (format.charAt(index - 1) == '%') {
+                return;
+            }
+
             if ((flags & TFormattableFlags.PREVIOUS_ARGUMENT) != 0) {
                 argumentIndex = Math.max(0, previousArgumentIndex);
             }
