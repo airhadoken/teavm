@@ -80,6 +80,15 @@ public abstract class TCharset implements Comparable<TCharset> {
         return charset;
     }
 
+    public static boolean isSupported(String charsetName) {
+        if (charsetName == null) {
+            throw new IllegalArgumentException("charsetName is null");
+        }
+        checkCanonicalName(charsetName);
+        TCharset charset = charsets.get(charsetName.toUpperCase());
+        return charset != null;
+    }
+    
     public static TCharset defaultCharset() {
         return charsets.get("UTF-8");
     }
