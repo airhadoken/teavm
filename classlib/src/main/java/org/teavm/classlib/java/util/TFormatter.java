@@ -149,6 +149,10 @@ public final class TFormatter implements Closeable, Flushable {
                 | TFormattableFlags.LEADING_SPACE | TFormattableFlags.ZERO_PADDED
                 | TFormattableFlags.PARENTHESIZED_NEGATIVE | TFormattableFlags.SIGNED
                 | TFormattableFlags.GROUPING_SEPARATOR;
+        private static final int MASK_FOR_FLOAT_DECIMAL_FORMAT = MASK_FOR_GENERAL_FORMAT ^ TFormattableFlags.ALTERNATE
+                | TFormattableFlags.LEADING_SPACE | TFormattableFlags.ZERO_PADDED
+                | TFormattableFlags.PARENTHESIZED_NEGATIVE | TFormattableFlags.SIGNED
+                | TFormattableFlags.GROUPING_SEPARATOR;
         private TFormatter formatter;
         Appendable out;
         Locale locale;
@@ -223,6 +227,10 @@ public final class TFormatter implements Closeable, Flushable {
                     formatDecimalInt(specifier, true);
                     break;
 
+               case 'f':
+                    formatDecimalFloat(specifier, false);
+                    break;
+ 
                case '%':
                     out.append('%');
                     break;
@@ -315,6 +323,93 @@ public final class TFormatter implements Closeable, Flushable {
             } else if (arg instanceof Integer || arg instanceof Byte || arg instanceof Short) {
                 int value = ((Number) arg).intValue();
                 str = Integer.toString(Math.abs(value));
+                negative = value < 0;
+            } else {
+                throw new IllegalFormatConversionException(specifier, arg != null ? arg.getClass() : null);
+            }
+
+            int additionalSymbols = 0;
+            StringBuilder sb = new StringBuilder();
+            if (negative) {
+                if ((flags & TFormattableFlags.PARENTHESIZED_NEGATIVE) != 0) {
+                    sb.append('(');
+                    additionalSymbols += 2;
+                } else {
+                    sb.append('-');
+                    additionalSymbols++;
+                }
+            } else {
+                if ((flags & TFormattableFlags.SIGNED) != 0) {
+                    sb.append('+');
+                    additionalSymbols++;
+                } else if ((flags & TFormattableFlags.LEADING_SPACE) != 0) {
+                    sb.append(' ');
+                    additionalSymbols++;
+                }
+            }
+
+            StringBuilder valueSb = new StringBuilder();
+            if ((flags & TFormattableFlags.GROUPING_SEPARATOR) != 0) {
+                char separator = new DecimalFormatSymbols(locale).getGroupingSeparator();
+                int size = ((DecimalFormat) NumberFormat.getNumberInstance(locale)).getGroupingSize();
+                int offset = str.length() % size;
+                if (offset == 0) {
+                    offset = size;
+                }
+
+                int prev = 0;
+                for (int i = offset; i < str.length(); i += size) {
+                    valueSb.append(str.substring(prev, i));
+                    valueSb.append(separator);
+                    prev = i;
+                }
+                valueSb.append(str.substring(prev));
+            } else {
+                valueSb.append(str);
+            }
+
+            if ((flags & TFormattableFlags.ZERO_PADDED) != 0) {
+                int actual = valueSb.length() + additionalSymbols;
+                for (int i = actual; i < width; ++i) {
+                    sb.append(Character.forDigit(0, 10));
+                }
+            }
+            sb.append(valueSb);
+
+            if (negative && (flags & TFormattableFlags.PARENTHESIZED_NEGATIVE) != 0) {
+                sb.append(')');
+            }
+
+            formatGivenString(upperCase, sb.toString());
+        }
+
+        private void formatDecimalFloat(char specifier, boolean upperCase) throws IOException {
+            verifyFlags(specifier, MASK_FOR_INT_DECIMAL_FORMAT);
+            if ((flags & TFormattableFlags.SIGNED) != 0 && (flags & TFormattableFlags.LEADING_SPACE) != 0) {
+                throw new TIllegalFormatFlagsException("+ ");
+            }
+            if ((flags & TFormattableFlags.ZERO_PADDED) != 0 && (flags & TFormattableFlags.LEFT_JUSTIFY) != 0) {
+                throw new TIllegalFormatFlagsException("0-");
+            }
+            if (precision >= 0) {
+                throw new TIllegalFormatPrecisionException(precision);
+            }
+            if ((flags & TFormattableFlags.LEFT_JUSTIFY) != 0 && width < 0) {
+                throw new TMissingFormatWidthException(format.substring(formatSpecifierStart, index));
+            }
+
+            String str;
+            Object arg = args[argumentIndex];
+            boolean negative;
+            if (arg instanceof Double) {
+                Double value = (Double) arg;
+                str = Double.toString(Math.abs(value));
+                negative = value < 0;
+            } else if (arg instanceof Float) {
+                float value = ((Number) arg).floatValue();
+                // TODO: no control yet over decimal vs. exponential stringification.
+                // Figure out how to do that and use decimal for 'f' and exp for 'e'
+                str = Float.toString(Math.abs(value));
                 negative = value < 0;
             } else {
                 throw new IllegalFormatConversionException(specifier, arg != null ? arg.getClass() : null);
